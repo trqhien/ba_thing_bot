@@ -39,7 +39,6 @@ public final class QuotesController {
             pickuplineCreator = "[\(replyToUserFirstName)](tg://user?id=\(replyToUserID))"
         }
 
-		print("🌮messageID: \(context.message?.messageId), message: \(context.message?.text), reply: \(context.message?.replyToMessage?.text)")
 
         let buttonSave = InlineKeyboardButton(text:  "💾 Save", callbackData: "save-quote message-id=\(replyToMessageID)")
         let buttonCancel = InlineKeyboardButton(text: "🙅🏻‍♂️ Cancel", callbackData: "cancelsave")
@@ -60,16 +59,10 @@ public final class QuotesController {
 
     public func onCallbackQuery(context: Context) throws -> Bool {
         guard let callbackQuery = context.update.callbackQuery else { return false }
-        guard let chatId = callbackQuery.message?.chat.id else { return false }
-        guard let messageId = callbackQuery.message?.messageId else { return false }
         guard let data = callbackQuery.data else { return false }
-
-//        print("🌮data: \(data)")
-//		print("🌮🌮messageID: \(context.message?.messageId), message: \(context.message?.text), , reply: \(context.message?.replyToMessage?.text)")
 
 		if SaveCommandValidator().checkIfValid(data) {
 			try savePickupline(context: context)
-//            try listUsers(context: context)
 		}
 
         return true
@@ -94,8 +87,6 @@ public final class QuotesController {
 			.flatMapThrowing{ [weak self] res in
 				let user = try res.content.decode(User.self)
 
-                print("🌮error: \(user.id.uuidString)")
-
 				self?.app.client
 					.post("https://ba-thing-api.herokuapp.com/api/quotes", headers: headers) { req in
 						try req.content.encode([
@@ -119,7 +110,6 @@ public final class QuotesController {
 						}
 					}
 					.whenFailure { error in
-						print("🌮🌮There was an error saving the user: \(error)")
                         context.respondAsync(error.localizedDescription)
 						// send error message to client
 						// return true
@@ -131,45 +121,6 @@ public final class QuotesController {
 				// send error message to client
 				// return true
 			}
-
-//		let req = Request(method: .post, uri: "http://some-endpoint")
-//		req.formURLEncoded = Node(node: [
-//			"email": "mymail@vapor.codes"
-//		])
-//
-//		try drop.client.respond(to: req)
-//
-//		let headers = HTTPHeaders()
-
-		
-//		let body = HTTP
-
-//		let body = HTTPBody(
-
-
-//		let httpReq = HTTPRequest(
-//			method: .POST,
-//			url: URL(string: "/post")!,
-//			headers: headers,
-//			body: body)
-//
-//		let client = HTTPClient.connect(hostname: "httpbin.org", on: req)
-//
-//		let httpRes = client.flatMap(to: HTTPResponse.self) { client in
-//			return client.send(httpReq)
-//		}
-
-//		if let markup = itemListInlineKeyboardMarkup(context: context) {
-//
-//			bot.editMessageReplyMarkupAsync(chatId: .chat(chatId), messageId: messageId, replyMarkup: .inlineKeyboardMarkup(markup))
-//		}
-
-//		context.respondAsync(
-//			"Searching messageID: \(quoteToSaved)?"
-//		) { message, error in
-//			guard let error = error else { return }
-//			print("🌮error: \(error)")
-//		}
 
 		return true
 	}
