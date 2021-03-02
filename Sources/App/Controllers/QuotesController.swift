@@ -9,18 +9,22 @@ import Foundation
 import TelegramBotSDK
 import Vapor
 
+//let BASE_URL = "http://localhost:8080"
+let BASE_URL = "https://ba-thing-api.herokuapp.com"
+
 public final class QuotesController {
-//    let bot: TelegramBot
+    let bot: TelegramBot
 	let app: Application
 
     public init(bot: TelegramBot, app: Application, router: inout Router) {
-//        self.bot = bot
+        self.bot = bot
 		self.app = app
         router["save", .slashRequired] = save
+        router["search", .slashRequired] = search
         router[.callback_query(data: nil)] = onCallbackQuery
     }
 
-    public func save(context: Context) -> Bool {
+    func save(context: Context) -> Bool {
         guard
             let replyToUserID = context.message?.replyToMessage?.from?.id,
             let replyToMessageID = context.message?.replyToMessage?.messageId,
@@ -39,20 +43,56 @@ public final class QuotesController {
             pickuplineCreator = "[\(replyToUserFirstName)](tg://user?id=\(replyToUserID))"
         }
 
-
-        let buttonSave = InlineKeyboardButton(text:  "💾 Save", callbackData: "save-quote message-id=\(replyToMessageID)")
-        let buttonCancel = InlineKeyboardButton(text: "🙅🏻‍♂️ Cancel", callbackData: "cancelsave")
-        let markup = InlineKeyboardMarkup(inlineKeyboard: [[buttonSave, buttonCancel]])
+        let buttonConfirm = InlineKeyboardButton(text:  "✅ Ok lưu nhóoooo", callbackData: "save-quote message-id=\(replyToMessageID)")
+        let markup = InlineKeyboardMarkup(inlineKeyboard: [[buttonConfirm]])
 
         context.respondAsync(
             "👆Lưu câu thính xịn này được thả bởi \(pickuplineCreator)?",
             parseMode: .markdown,
             replyToMessageId: replyToMessageID,
             replyMarkup: .inlineKeyboardMarkup(markup)
-        ) { message, error in
-            guard let error = error else { return }
-            print("🌮error: \(error)")
+        )
+
+        return true
+    }
+
+    func search(context: Context) -> Bool {
+        guard let searchTerm = context.args.scanWord() else {
+            context.respondAsync(
+                "Cú pháp sai òi, thiếu search term nhó `/search [SEARCH_TERM]`",
+                parseMode: .html
+            )
+            return true
         }
+
+        app.client
+            .get("\(BASE_URL)/api/quotes/search") { req in
+                try req.query.encode(["term": searchTerm])
+            }
+            .flatMapThrowing { res in
+                let quotes = try res.content.decode([Quote].self)
+
+                if quotes.isEmpty {
+                    context.respondAsync("Không tìm thấy thính nào cả")
+                } else {
+                    let things = quotes
+                        .map { $0.long }
+                        .reduce("") { (result, quote) in
+                        return result + "\n\n" + quote
+                    }
+
+                    context.respondAsync(
+                        """
+                        <b>Các câu thính có chữ "\(searchTerm)"</b>
+                        \(things)
+                        """,
+                        parseMode: .html
+                    )
+                }
+            }
+            .whenFailure { error in
+                context.respondAsync(error.localizedDescription)
+            }
 
         return true
     }
@@ -68,14 +108,24 @@ public final class QuotesController {
         return true
     }
 
+    @discardableResult
 	private func savePickupline(context: Context) throws -> Bool {
 		guard
 			let pickuplineToSaved = context.message?.replyToMessage?.text,
-			let replyToUserID = context.message?.replyToMessage?.from?.id
+			let replyToUserID = context.message?.replyToMessage?.from?.id,
+            let replyToMessageID = context.message?.replyToMessage?.messageId,
+            let chatId = context.message?.chat.id,
+            let messageId = context.message?.messageId
 		else {
-			// return error message
 			return false
 		}
+
+        bot.editMessageTextSync(
+            chatId: .chat(chatId),
+            messageId: messageId,
+            text: "⏳ <b>Đang lưu đừng manh động</b>",
+            parseMode: .html
+        )
 
 		var headers = HTTPHeaders()
 		headers.add(name: .contentType, value: "application/json")
@@ -83,43 +133,34 @@ public final class QuotesController {
 		headers.add(name: .accept, value: "*/*")
 
 		app.client
-			.get("https://ba-thing-api.herokuapp.com/api/users/telegram/\(replyToUserID)")
+			.get("\(BASE_URL)/api/users/telegram/\(replyToUserID)")
 			.flatMapThrowing{ [weak self] res in
 				let user = try res.content.decode(User.self)
 
 				self?.app.client
-					.post("https://ba-thing-api.herokuapp.com/api/quotes", headers: headers) { req in
+					.post("\(BASE_URL)/api/quotes", headers: headers) { req in
 						try req.content.encode([
                             "short": "",
 							"long": pickuplineToSaved,
                             "userID": "\(user.id.uuidString)"
 						])
 					}
-					.map { response in
-						// save successfully
-						// edit message
+					.flatMapThrowing { [weak self] response in
+                        _ = try response.content.decode(Quote.self)
 
-						//		if let markup = itemListInlineKeyboardMarkup(context: context) {
-						//
-						//			bot.editMessageReplyMarkupAsync(chatId: .chat(chatId), messageId: messageId, replyMarkup: .inlineKeyboardMarkup(markup))
-						//		}
-
-                        context.respondAsync("save \(response)") { message, error in
-							guard let error = error else { return }
-							print("🌮error: \(error)")
-						}
+                        self?.bot.editMessageTextAsync(
+                            chatId: .chat(chatId),
+                            messageId: messageId,
+                            text: "<b>Ahihi lưu òi nha 👏🎉</b>",
+                            parseMode: .html
+                        )
 					}
 					.whenFailure { error in
                         context.respondAsync(error.localizedDescription)
-						// send error message to client
-						// return true
 					}
 			}
 			.whenFailure { error in
-				print("🌮There was an error saving the user: \(error)")
                 context.respondAsync(error.localizedDescription)
-				// send error message to client
-				// return true
 			}
 
 		return true

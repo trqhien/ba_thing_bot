@@ -53,12 +53,13 @@ public class TestController {
         )
 
         context.respondAsync(
-            startText,
+//            startText,
+            "\(BASE_URL)",
             parseMode: .none,
             disableWebPagePreview: false,
             disableNotification: false,
             replyToMessageId: context.message?.messageId,
-            replyMarkup: .replyKeyboardMarkup(markup),
+//            replyMarkup: .replyKeyboardMarkup(markup),
             [:]
         ) { message, error in
             //
